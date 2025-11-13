@@ -237,7 +237,7 @@ class SteamService : Service(), IChallengeUrlChanged {
     // Connectivity management for Wi-Fi-only downloads
     private lateinit var connectivityManager: ConnectivityManager
     private lateinit var networkCallback: ConnectivityManager.NetworkCallback
-    private var isWifiConnected: Boolean = true
+    @Volatile private var isWifiConnected: Boolean = true
 
     // Add these as class properties
     private var picsGetProductInfoJob: Job? = null
@@ -1749,12 +1749,20 @@ class SteamService : Service(), IChallengeUrlChanged {
         // Determine initial Wi-Fi state
         val activeNetwork = connectivityManager.activeNetwork
         val capabilities = connectivityManager.getNetworkCapabilities(activeNetwork)
-        isWifiConnected = capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+        isWifiConnected = capabilities?.run {
+            hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+                    hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+        } == true
         // Register callback for Wi-Fi connectivity
         networkCallback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
                 Timber.d("Wifi available")
                 isWifiConnected = true
+            }
+            override fun onCapabilitiesChanged(network: Network,
+                                               caps: NetworkCapabilities) {
+                isWifiConnected = caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+                        caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
             }
             override fun onLost(network: Network) {
                 Timber.d("Wifi lost")
@@ -1766,12 +1774,13 @@ class SteamService : Service(), IChallengeUrlChanged {
                         info.cancel()
                     }
                     downloadJobs.clear()
-                    notificationHelper.notify("Download paused – waiting for Wi-Fi")
+                    notificationHelper.notify("Download paused – waiting for Wi-Fi/LAN")
                 }
             }
         }
         val networkRequest = NetworkRequest.Builder()
             .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+            .addTransportType(NetworkCapabilities.TRANSPORT_ETHERNET)
             .build()
         connectivityManager.registerNetworkCallback(networkRequest, networkCallback)
 
