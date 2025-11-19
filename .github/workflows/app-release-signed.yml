@@ -9,6 +9,7 @@ on:
       - 'keyvalues/**'
       - 'media/**'
       - '.github/ISSUE_TEMPLATE/**'
+  workflow_dispatch:
 
 jobs:
   build:
